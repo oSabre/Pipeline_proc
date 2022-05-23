@@ -1,0 +1,1 @@
+g++ -std=c++11 -o exe  main.cpp modules.h -I include/ -I//usr/local/systemc-2.3.1/include -L//usr/local/systemc-2.3.1//lib-linux64 -Wl,-rpath=//usr/local/systemc-2.3.1//lib-linux64 -lsystemc

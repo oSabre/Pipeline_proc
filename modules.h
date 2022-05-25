@@ -76,36 +76,43 @@ SC_MODULE(m21){
 };
 
 SC_MODULE(pc){
-	sc_in<int> palavra[4];
 	sc_in_clk clock;
 	sc_in<int> endereco;
+	sc_in<bool> enable;
 	sc_out<int> endS;
-	sc_out<int> saida[4];
 
 	void manda(){
-		for(int i = 0; i < 4; i++){
-			saida[i].write(palavra[i]);
-		}
-		if(endereco < 19){
-			endS.write(endereco+1);
+		if(endereco < 19 && enable == true){
+			cout << "PC Endereço: " << endereco <<endl;
+			endS.write(endereco);
 		}
 	}
 
 	SC_CTOR(pc){
 		SC_METHOD(manda);
-			sensitive << clock.pos();
-			sensitive << endereco;
+			sensitive << clock.neg();
+			//sensitive << endereco;
 	}
 };
 
 
 SC_MODULE(MemIns){
 	sc_in<int> palavra[4];
+	sc_in<bool> enableLOAD;
 	sc_in<int> endereco;
 	sc_in_clk clock;
-	int memoria[80]; // Cabem 20 (ou 18, sei lá pq) instruções aqui.
+	int memoria[80] = {0,0,0,0,0,0,0,0,0,0,
+						0,0,0,0,0,0,0,0,0,0,
+						0,0,0,0,0,0,0,0,0,0,
+						0,0,0,0,0,0,0,0,0,0,
+						0,0,0,0,0,0,0,0,0,0,
+						0,0,0,0,0,0,0,0,0,0,
+						0,0,0,0,0,0,0,0,0,0,
+						0,0,0,0,0,0,0,0,0,0}; // Cabem 20 (ou 18, sei lá pq) instruções aqui.
+	int i = 0;
 	sc_out<int> envio[4];
 
+	/*
 	void escreve(){
 		for(int i = 0; i < 4; i++){
 			//cout << endereco << endl;
@@ -113,24 +120,49 @@ SC_MODULE(MemIns){
 			cout << endereco*4+i << " " << memoria[(endereco*4)+i] << endl;
 		}
 	}
+	*/
 
 	void envia(){
-		for(int i = 0; i < 4; i++){
-			envio[i].write(memoria[endereco*4+i]);
-			//cout << memoria[endereco*4+i] << endl;
+		if(enableLOAD == true){
+			cout << "Saida Mem Ins: ";
+			for(int i = 0; i < 4; i++){
+				envio[i].write(memoria[endereco*4+i]);
+				cout << memoria[endereco*4+i]<< " ";
+			}
+			cout << endl;
 		}
 		
 	}
 
+	void test(){
+		if(enableLOAD == false){
+			//cout << i << " i" <<endl;
+			for(int z = 0; z < 4; z++){
+				memoria[(i*4)+z] = palavra[z];
+			}
+			i++;
+			/*
+			for(int z = 0; z < 80; z++){
+				cout << memoria[z] << " ";
+			}
+			cout << endl;
+			*/
+		}
+	}
+
 	SC_CTOR(MemIns){
-		SC_METHOD(escreve);
+		/*SC_METHOD(escreve);
 			sensitive << endereco;
 			sensitive << palavra[0];
 			sensitive << palavra[1];
 			sensitive << palavra[2];
 			sensitive << palavra[3];
+			*/
 		SC_METHOD(envia);
 			sensitive << clock.neg();
+
+		SC_METHOD(test);
+			sensitive << clock.pos();
 	}
 };
 
@@ -138,27 +170,31 @@ SC_MODULE(IFID){
 	sc_in<int> palavra[4];
 	sc_in_clk clock;
 	sc_out<int> op1,op2,op, memP;
+	sc_in<bool> enable;
 	int x[4];
 
 	void nafila(){
-		for(int i = 0; i < 4 ; i++){
-			x[i] = palavra[i];
+		//cout << enable << " IFID Aqui ";
+		if(enable == true){
+			for(int i = 0; i < 4 ; i++){
+				x[i] = palavra[i];
+				//cout << palavra[i] << " ";
+			}
 		}
 	}
 
 	void fora(){
-		op.write(x[0]);
-		op1.write(x[1]);
-		op2.write(x[2]);
-		memP.write(x[3]);
+		if(enable == true){
+			op.write(x[0]);
+			op1.write(x[1]);
+			op2.write(x[2]);
+			memP.write(x[3]);
+		}
 	}
 
 	SC_CTOR(IFID){
 		SC_METHOD(nafila);
-			sensitive << palavra[0];
-			sensitive << palavra[1];
-			sensitive << palavra[2];
-			sensitive << palavra[3];
+			sensitive << clock.pos();
 		SC_METHOD(fora);
 			sensitive << clock.neg();
 	}
@@ -168,12 +204,19 @@ SC_MODULE(JumpControl){
 	sc_in<int> ope;
 	sc_in<int> instrucao;
 	sc_out<int> pule;
+	sc_in<int> ende;
+	sc_in<bool> enable;
 
 	void pula(){
-		int x = instrucao;
-		if(ope == 10){
-			pule.write(1);
-			cout << x << " " <<pule <<endl;
+		if(enable == true){
+			int x = instrucao-2;
+			if(ope == 10){
+				pule.write(x);
+				//cout << x << " x <-JC-> " << ope <<pule <<endl;
+			}else{
+				pule.write(ende+1);
+				//cout << pule << endl;
+			}
 		}
 	}
 
@@ -181,6 +224,7 @@ SC_MODULE(JumpControl){
 		SC_METHOD(pula);
 			sensitive << ope;
 			sensitive << instrucao;
+			sensitive << ende;
 	}
 };
 
@@ -189,29 +233,34 @@ SC_MODULE(bREG){
 	sc_in<int> rr2;
 	sc_in<int> wbR;
 	sc_in<int> wbV;
+	sc_in<bool> enable;
 	int banco[32] = {0,1,2,3,4,5,6,7,
 					 8,7,6,5,4,3,2,1,
 					 1,7,8,6,3,2,5,4,
 					 6,2,1,3,4,5,8,7};
 	sc_out<int> rd1;
 	sc_out<int> rd2;
+	sc_in_clk clock;
 
 	void salva(){
-		banco[wbR] = wbV;
-		cout <<"Valor do registrador(WB) "<< wbR << ": "<< banco[wbR] << endl;
+		if(enable == true){
+			banco[wbR] = wbV;
+			cout <<"Valor do registrador(WB) "<< wbR << ": "<< banco[wbR] << endl;
+		}
 	}
 
 	void writeR(){
-		rd1.write(banco[rr1]);
-		cout <<"Valor do registrador " << rr1 << ": " << banco[rr1] <<endl;
- 		rd2.write(banco[rr2]);
- 		cout <<"Valor do registrador " << rr2 << ": " << banco[rr2] <<endl;
+		if(enable ==true){
+			rd1.write(banco[rr1]);
+			//cout <<"Valor do registrador " << rr1 << ": " << banco[rr1] <<endl;
+ 			rd2.write(banco[rr2]);
+ 			//cout <<"Valor do registrador " << rr2 << ": " << banco[rr2] <<endl;
+		}	
 	}
 
 	SC_CTOR(bREG){
 		SC_METHOD(writeR);
-			sensitive << rr1;
-			sensitive << rr2;
+			sensitive << clock.neg();
 		SC_METHOD(salva);
 			sensitive << wbR;
 			sensitive << wbV;
@@ -222,6 +271,7 @@ SC_MODULE(IDEX){
 	sc_in<int> op1;
 	sc_in<int> op2;
 	sc_in<int> op;
+	sc_in<bool> enable;
 	sc_out<int> s1;
 	sc_out<int> s2;
 	sc_out<int> opS;
@@ -229,15 +279,19 @@ SC_MODULE(IDEX){
 	sc_in_clk clock;
 
 	void prafila(){
-		x[0] = op1;
-		x[1] = op2;
-		x[2] = op;
+		if(enable == true){
+			x[0] = op1;
+			x[1] = op2;
+			x[2] = op;
+		}
 	}
 
 	void writeIDEX(){
-		opS.write(x[2]);
-		s1.write(x[0]);
-		s2.write(x[1]);	
+		if(enable == true){
+			opS.write(x[2]);
+			s1.write(x[0]);
+			s2.write(x[1]);	
+		}
 	}
 
 	SC_CTOR(IDEX){
@@ -255,6 +309,7 @@ SC_MODULE(EXMEM){
 	sc_in<int> op;
 	sc_in<int> memP;
 	sc_in<int> vR;
+	sc_in<bool> enable;
 	sc_out<int> srALU;
 	sc_out<int> sop;
 	sc_out<int> smP;
@@ -263,17 +318,21 @@ SC_MODULE(EXMEM){
 	sc_in_clk clock;
 
 	void prafila(){
-		x[0] = resALU;
-		x[1] = op;
-		x[2] = memP;
-		x[3] = vR;
+		if(enable == true){
+			x[0] = resALU;
+			x[1] = op;
+			x[2] = memP;
+			x[3] = vR;
+		}
 	}
 
 	void writeEXMEM(){
-		srALU.write(x[0]);
-		sop.write(x[1]);
-		smP.write(x[2]);
-		svR.write(x[3]);
+		if(enable == true){
+			srALU.write(x[0]);
+			sop.write(x[1]);
+			smP.write(x[2]);
+			svR.write(x[3]);
+		}
 	}
 
 	SC_CTOR(EXMEM){
@@ -291,6 +350,7 @@ SC_MODULE(MEM){
 	sc_in<int> memP;
 	sc_in<int> valor;
 	sc_in<int> op;
+	sc_in<bool> enable;
 	sc_out<int> vS;
 	int memoria[32] = {0,1,2,3,4,5,6,7,
 					   8,9,10,11,12,13,14,15,
@@ -308,13 +368,15 @@ SC_MODULE(MEM){
 	}
 
 	void opera(){
-		switch(op){
-			case 8:
-				lemem();
-				break;
-			case 9:
-				armazena();
-				break;
+		if(enable == true){
+			switch(op){
+				case 8:
+					lemem();
+					break;
+				case 9:
+					armazena();
+					break;
+			}
 		}
 	}
 
@@ -329,25 +391,30 @@ SC_MODULE(MEMWB){
 	sc_in<int> resALU; //resultado alu
 	sc_in<int> op; // operação
 	sc_in<int> pR; //para o registrador x
+	sc_in<bool> enable;
 	sc_out<int> sV;
 	sc_out<int> sR;
 	int x[4];
 	sc_in_clk clock;
 
 	void writeMEMWB(){
-		x[0] = vmem;
-		x[1] = resALU;
-		x[2] = op;
-		x[3] = pR;
+		if(enable == true){
+			x[0] = vmem;
+			x[1] = resALU;
+			x[2] = op;
+			x[3] = pR;
+		}
 	}
 
 	void dsaida(){
-		if(op == 8){
-			sV.write(x[0]);
-			sR.write(31);
-		}else{
-			sV.write(x[1]);
-			sR.write(x[3]);
+		if(enable == true){
+			if(op == 8){
+				sV.write(x[0]);
+				sR.write(31);
+			}else{
+				sV.write(x[1]);
+				sR.write(x[3]);
+			}
 		}
 		
 	}

@@ -49,45 +49,43 @@ int sc_main (int argc, char* argv[]) {
 	sc_signal<int> sme;
 	sc_signal<int> swb1, swb2;
 	sc_signal<int> addressE, addressS;
+	sc_signal<bool> enableMI, globalEN;
 	sc_clock relogio("clock", 1, SC_NS, 1, 1, SC_NS);
 
 
 
 	pc pc1("Program_Counter");
-		pc1.palavra[0](op);
-		pc1.palavra[1](op1);
-		pc1.palavra[2](op2);
-		pc1.palavra[3](mem);
 		pc1.endereco(addressE);
 		pc1.endS(addressS);
 		pc1.clock(relogio);
-		pc1.saida[0](spc1);
-		pc1.saida[1](spc2);
-		pc1.saida[2](spc3);
-		pc1.saida[3](spc4);
+		pc1.enable(globalEN);
 
 	MemIns memIn("Memoria_de_Instrucao");
-		memIn.palavra[0](spc1);
-		memIn.palavra[1](spc2);
-		memIn.palavra[2](spc3);
-		memIn.palavra[3](spc4);
+		memIn.palavra[0](op);
+		memIn.palavra[1](op1);
+		memIn.palavra[2](op2);
+		memIn.palavra[3](mem);
 		memIn.endereco(addressS);
 		memIn.clock(relogio);
 		memIn.envio[0](smi1);
 		memIn.envio[1](smi2);
 		memIn.envio[2](smi3);
 		memIn.envio[3](smi4);
+		memIn.enableLOAD(globalEN);
 
 	JumpControl jc("Controle_de_pulo");
 		jc.ope(sbi1);
 		jc.instrucao(sbi2);
 		jc.pule(addressE);
+		jc.ende(addressS);
+		jc.enable(globalEN);
 
 	IFID bIFID("IF_ID");
 		bIFID.palavra[0](smi1);
 		bIFID.palavra[1](smi2);
 		bIFID.palavra[2](smi3);
 		bIFID.palavra[3](smi4);
+		bIFID.enable(globalEN);
 		bIFID.clock(relogio);
 		bIFID.op(sbi1);
 		bIFID.op1(sbi2);
@@ -100,7 +98,9 @@ int sc_main (int argc, char* argv[]) {
 		reg.wbR(swb2);
 		reg.wbV(swb1);
 		reg.rd1(sbr1); // Vai pra memória em caso de 9
-		reg.rd2(sbr2); 
+		reg.rd2(sbr2);
+		reg.enable(globalEN);
+		reg.clock(relogio);
 
 	IDEX bIDEX("ID_EX");
 		bIDEX.op1(sbr1);
@@ -110,12 +110,14 @@ int sc_main (int argc, char* argv[]) {
 		bIDEX.s1(sie2); // Vai pra memória em caso de 9
 		bIDEX.s2(sie3); 
 		bIDEX.clock(relogio);
+		bIDEX.enable(globalEN);
 
 	alu ula("ULA");
 		ula.op(sie1);
 		ula.op1(sie2);
 		ula.op2(sie3);
 		ula.res(ulaRes);
+		//ula.enable(globalEN);
 
 	EXMEM em("EX_MEM");
 		em.resALU(ulaRes);
@@ -127,12 +129,14 @@ int sc_main (int argc, char* argv[]) {
 		em.sop(sem2);
 		em.smP(sem3);
 		em.svR(sem4);
+		em.enable(globalEN);
 
 	MEM memo("Memoria");
 		memo.memP(sem3);
 		memo.valor(sem4);
 		memo.op(sem2);
 		memo.vS(sme);
+		memo.enable(globalEN);
 
 	MEMWB mwb("MEM_WB");
 		mwb.vmem(sme);
@@ -142,28 +146,41 @@ int sc_main (int argc, char* argv[]) {
 		mwb.clock(relogio);
 		mwb.sV(swb1);
 		mwb.sR(swb2);
+		mwb.enable(globalEN);
 
-
-	for(int i = 0; i < 50; i++){
-		sc_start(1, SC_NS);
+	//addressE = 0;
+	globalEN = false;
+	enableMI = false;
+	for(int i = 0; i < 20; i++){
+		cout << i << endl;
 		if(i == 0){
+			enableMI = true;
 			op = 6;
 			op1 = 4;
 			op2 = 5;
 			mem = 10;
 		}
 		if(i==1){
+			enableMI = true;
 			op = 7;
 			op1 = 6;
 			op2 = 3;
 			mem = 15;
 		}
+		
 		if(i==2){
+			enableMI = true;
 			op = 10;
-			op1 = 1;
+			op1 = 2;
 			op2 = 0;
 			mem =0;
 		}
+
+		if(i==3){
+			globalEN = true;
+		}
+		sc_start(1, SC_NS);
+		enableMI = false;
 	}
 
 }
